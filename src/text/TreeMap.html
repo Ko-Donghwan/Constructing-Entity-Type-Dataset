@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Treemap Visualization</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+        .tooltip {
+            position: absolute;
+            background: white;
+            color: #333;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .node text {
+            font-size: 14px;
+            text-anchor: middle;
+            fill: white;
+            pointer-events: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="fileInput" />
+    <div class="tooltip"></div>
+    <svg width="800" height="600"></svg>
+    
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const lines = e.target.result.split('\n');
+                const categoryCount = {};
+                
+                lines.forEach(line => {
+                    const parts = line.trim().split(/\s+/);
+                    if (parts.length === 2) {
+                        const category = parts[1];
+                        categoryCount[category] = (categoryCount[category] || 0) + 1;
+                    }
+                });
+                
+                let filteredCategories = {};
+                let etcCount = 0;
+                Object.keys(categoryCount).forEach(category => {
+                    if (categoryCount[category] >= 10) {
+                        filteredCategories[category] = categoryCount[category];
+                    } else {
+                        etcCount += categoryCount[category];
+                    }
+                });
+                
+                const data = {
+                    "name": "Entities",
+                    "children": Object.keys(filteredCategories).map(category => ({
+                        "name": category,
+                        "size": filteredCategories[category]
+                    }))
+                };
+                
+                renderTreemap(data);
+            };
+            reader.readAsText(file);
+        });
+
+        function renderTreemap(data) {
+            const width = 800, height = 600;
+            const svg = d3.select("svg").attr("width", width).attr("height", height);
+            const tooltip = d3.select(".tooltip");
+            svg.selectAll("*").remove();
+            
+            const root = d3.hierarchy(data)
+                .sum(d => d.size)
+                .sort((a, b) => b.value - a.value);
+            
+            d3.treemap()
+                .size([width, height])
+                .padding(6)
+                (root);
+            
+            const color = d3.scaleOrdinal(d3.schemeTableau10);
+            
+            const node = svg.selectAll("g")
+                .data(root.leaves())
+                .enter().append("g")
+                .attr("transform", d => `translate(${d.x0},${d.y0})`)
+                .on("mouseover", (event, d) => {
+                    tooltip.style("display", "block")
+                        .text(`${d.data.name}: ${d.value}`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY + 10) + "px");
+                })
+                .on("mousemove", (event) => {
+                    tooltip.style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY + 10) + "px");
+                })
+                .on("mouseout", () => tooltip.style("display", "none"));
+            
+            node.append("rect")
+                .attr("width", d => d.x1 - d.x0)
+                .attr("height", d => d.y1 - d.y0)
+                .attr("fill", d => color(d.data.name))
+                .attr("stroke", "#fff")
+                .style("opacity", 0)
+                .transition()
+                .duration(500)
+                .style("opacity", 1);
+            
+            node.append("text")
+                .attr("x", d => (d.x1 - d.x0) / 2)
+                .attr("y", d => (d.y1 - d.y0) / 2)
+                .attr("dy", ".35em")
+                .text(d => d.data.name)
+                .style("font-size", d => Math.min((d.x1 - d.x0) / d.data.name.length * 8, 18) + "px")
+                .style("fill", "#333")
+                .style("opacity", 0)
+                .transition()
+                .duration(500)
+                .style("opacity", 1);
+        }
+    </script>
+</body>
+</html>
